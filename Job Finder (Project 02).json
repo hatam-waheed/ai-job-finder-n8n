@@ -1,0 +1,777 @@
+{
+  "name": "Job Finder (Project 02)",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "Job Finder",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Name"
+            },
+            {
+              "fieldLabel": "Location"
+            },
+            {
+              "fieldLabel": "Job Title"
+            },
+            {
+              "fieldLabel": "CV",
+              "fieldType": "file"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.5,
+      "position": [
+        -944,
+        -144
+      ],
+      "id": "0aea700c-0457-4f8e-ae68-eaad9ef07e81",
+      "name": "On form submission",
+      "webhookId": "3a71c3a9-66d5-4492-a503-98af42b61cf0"
+    },
+    {
+      "parameters": {
+        "url": "https://api.apify.com/v2/acts/apify~google-search-scraper/run-sync-get-dataset-items?token=YOUR_API_KEY",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"queries\":\n    \"{{ $json.output.target_job_title }}jobs in {{ $json.output.location }}\",\n  \n\"maxPagesPerQuery\": 1,\n  \"maxResults\": 2\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -208,
+        -144
+      ],
+      "id": "50369f84-584d-4dd2-a186-7ad577f51e2c",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "operation": "pdf",
+        "binaryPropertyName": "CV",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        -752,
+        -144
+      ],
+      "id": "deba30ae-39ad-429f-9930-9b378848ded9",
+      "name": "Extract from File"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are a CV skill extraction assistant.\n\nYour task is to read the extracted CV text and identify only the candidate's skills.\n\nCandidate Details:\nName: {{ $('On form submission').item.json.Name }}\nLocation: {{ $('On form submission').item.json.Location }}\nTarget Job Title: {{ $('On form submission').item.json['Job Title'] }}\n\nExtracted CV Text:\n{{ $json.text }}\n\nInstructions:\n- Extract only real skills mentioned in the CV.\n- Separate technical skills, soft skills, tools, programming languages, frameworks, databases, and AI/automation skills.\n- Do not invent skills.\n- If a category has no skills, return an empty array.\n- Clean spelling and formatting.\n- Remove duplicate skills.\n- Return only valid JSON.",
+        "hasOutputParser": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        -544,
+        -144
+      ],
+      "id": "b2216aaa-cb42-4839-80d9-739999cd76ac",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "model": "llama-3.3-70b-versatile",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        -576,
+        48
+      ],
+      "id": "40e84dd1-956f-4d2d-bd2f-fd5ceee647a2",
+      "name": "Groq Chat Model",
+      "credentials": {
+        "groqApi": {
+          "id": "ibtqQVuB5AbaPZR9",
+          "name": "Groq account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n  \"candidate_name\": \"string\",\n  \"location\": \"string\",\n  \"target_job_title\": \"string\",\n  \"technical_skills\": [\"string\"]\n}\n"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        -400,
+        48
+      ],
+      "id": "93336cb6-5d7f-4eaa-a923-03d42189486e",
+      "name": "Structured Output Parser"
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n  \"candidate_name\": \"string\",\n  \"recommended_jobs\": [\n    {\n      \"job_title\": \"string\",\n      \"company\": \"string\",\n      \"location\": \"string\",\n      \"match_reason\": \"string\",\n      \"apply_link\": \"string\"\n    }\n  ]\n}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        144,
+        64
+      ],
+      "id": "48ff8131-6e27-48ce-8572-433f59945202",
+      "name": "Structured Output Parser1"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are a Job Recommendation Assistant.\n\nAnalyze the job search results and return ONLY valid JSON.\n\nCandidate:\nName: {{ $('AI Agent').item.json.output.candidate_name }}\nLocation: {{ $('AI Agent').item.json.output.location }}\nJob Title: {{ $('AI Agent').item.json.output.target_job_title }}\nSkills: {{ $('AI Agent').item.json.output.technical_skills }}\n\nJob Results:\n{{ JSON.stringify($json) }}\n\nRules:\n- Return only JSON\n- No markdown\n- No explanation\n- No extra text\n- No ```json",
+        "hasOutputParser": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        0,
+        -144
+      ],
+      "id": "a0612ef2-d38c-48a2-ab9a-d50a9dd7a535",
+      "name": "AI Agent1"
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-2.5-flash-lite",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        -32,
+        64
+      ],
+      "id": "da1a44d0-439d-4d2d-8fe5-cda7d72f41bf",
+      "name": "Google Gemini Chat Model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "TPNEb8sFhO3ae1In",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "1ty3oUt0GAs92Dfozu373ysn9D6tSnm_FTfdnApJlbQE",
+          "mode": "list",
+          "cachedResultName": "Untitled spreadsheet",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ty3oUt0GAs92Dfozu373ysn9D6tSnm_FTfdnApJlbQE/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ty3oUt0GAs92Dfozu373ysn9D6tSnm_FTfdnApJlbQE/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "title": "={{ $json.job_title }}",
+            "company": "={{ $json.company }}",
+            "location": "={{ $json.location }}",
+            "match reason": "={{ $json.match_reason }}",
+            "link": "={{ $json.apply_link }}"
+          },
+          "matchingColumns": [
+            "title"
+          ],
+          "schema": [
+            {
+              "id": "title",
+              "displayName": "title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "company",
+              "displayName": "company",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "location",
+              "displayName": "location",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "match reason",
+              "displayName": "match reason",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "link",
+              "displayName": "link",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        512,
+        -144
+      ],
+      "id": "39fd3918-34ce-4dd9-bade-dc1570581694",
+      "name": "Append or update row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "tXaaZLSpu5uofMkY",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const jobs = $input.first().json.output.recommended_jobs;\nconst candidateName = $input.first().json.output.candidate_name;\n\nreturn jobs.map(job => ({\n  json: {\n    candidate_name: candidateName,\n    job_title: job.job_title,\n    company: job.company,\n    location: job.location,\n    match_reason: job.match_reason,\n    apply_link: job.apply_link\n  }\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        320,
+        -144
+      ],
+      "id": "c6653eb9-c95e-4ae4-841a-ebdb998ac2e6",
+      "name": "Code in JavaScript"
+    }
+  ],
+  "pinData": {
+    "Extract from File": [
+      {
+        "json": {
+          "numpages": 1,
+          "numrender": 1,
+          "info": {
+            "PDFFormatVersion": "1.4",
+            "Language": "en-GB",
+            "EncryptFilterName": null,
+            "IsLinearized": false,
+            "IsAcroFormPresent": false,
+            "IsXFAPresent": false,
+            "IsCollectionPresent": false,
+            "IsSignaturesPresent": false,
+            "Title": "Resume",
+            "Creator": "Canva",
+            "Producer": "Canva",
+            "CreationDate": "D:20260517035650+00'00'",
+            "ModDate": "D:20260517035650+00'00'",
+            "Keywords": "DAHJ478jc2I,BAGhmnTu0dQ,0",
+            "Author": "Hatam Waheed",
+            "Trapped": {
+              "name": "False"
+            }
+          },
+          "metadata": {
+            "dc:title": "ResumeResume",
+            "dc:creator": [
+              "Hatam Waheed"
+            ]
+          },
+          "text": "Languages: English, Urdu, Sindhi.\n2022 - 2025\n2025 - Present\nBachelor of Science in Information Technology\nUniversity of Sindh, Jamshoro\nPersonal RAG Assistant\nDeveloped a personal AI assistant using ChromaDB and RAG concepts to retrieve and answer\npersonal information intelligently.\nBuilding AI automation workflows using n8n\nCreating AI agents and chatbot systems\nWorking with APIs, Webhooks, and AI integrations\nBuilding automation projects using Google Sheets and Gmail\nMotivated IT student and AI Automation learner with hands-on experience in building AI agents, automation\nworkflows, chatbots, and API integrations using n8n, OpenAI, Gemini, Webhooks, and JavaScript. Passionate\nabout Agentic AI systems, workflow automation, and solving real-world problems through intelligent\nautomation. Currently building practical projects to strengthen expertise in AI-powered systems and business\nautomation.\nHATTAM WAHEED\nHyderabad, Sindh | hatamwaheed123@gmail.com | 03331243099 | hattamwaheed.netlify.app\ngithub.com/hatam-waheed\nAI AUTOMATION & WORKFLOW INTERN\nAREA OF EXPERTISE\nPROJECTS\nEDUCATION\nADDITIONAL INFORMATION\nn8n Automation\nAI Agents\nAPIs & Webhooks\nREST APIs\nOpenAI & Gemini\nGoogle Sheets Automation\nWorkflow Automation\nJavaScript Basics\nTinyFish Automation\nPython Basics\nHTML & CSS\nJSON\nChromaDB\nRAG\nAI Job Finder Agent\nBuilt an AI-powered job finder workflow using n8n, TinyFish, Google Sheets, and AI integrations to\nsearch and organize relevant jobs automatically.\nCustomer Feedback AI Agent\nBuilt an AI-powered customer feedback automation system using n8n, AI integrations, forms, and\nGoogle Sheets. The system collects customer feedback, analyzes responses using AI, categorizes\nsentiment, and stores structured results automatically.\nAI Automation Learner\nEXPERIENCE",
+          "version": "5.3.31"
+        }
+      }
+    ],
+    "HTTP Request": [
+      {
+        "json": {
+          "#debug": {
+            "requestId": "2yaSOWWqLSV79pu",
+            "url": "http://www.google.com/search?q=AI+Automationjobs+in+Karachi",
+            "loadedUrl": "http://www.google.com/search?q=AI+Automationjobs+in+Karachi",
+            "method": "GET",
+            "retryCount": 0,
+            "errorMessages": [],
+            "statusCode": 200
+          },
+          "#error": false,
+          "searchQuery": {
+            "term": "AI Automationjobs in Karachi",
+            "url": "http://www.google.com/search?q=AI+Automationjobs+in+Karachi",
+            "device": "DESKTOP",
+            "page": 1,
+            "type": "SEARCH",
+            "domain": "google.com",
+            "countryCode": "US",
+            "languageCode": null,
+            "locationUule": null,
+            "resultsPerPage": 10
+          },
+          "url": "http://www.google.com/search?q=AI+Automationjobs+in+Karachi",
+          "hasNextPage": true,
+          "serpProviderCode": "N",
+          "resultsTotal": null,
+          "relatedQueries": [
+            {
+              "title": "Ai automation jobs in karachi salary",
+              "url": "https://www.google.com/search?sca_esv=c968c4e410faa55c&gl=US&hl=en&q=Ai+automation+jobs+in+karachi+salary&sa=X&ved=2ahUKEwiz483d_dWUAxVoqJUCHaCRDLgQ1QJ6BAg_EAE"
+            },
+            {
+              "title": "Ai automation jobs in karachi no experience",
+              "url": "https://www.google.com/search?sca_esv=c968c4e410faa55c&gl=US&hl=en&q=Ai+automation+jobs+in+karachi+no+experience&sa=X&ved=2ahUKEwiz483d_dWUAxVoqJUCHaCRDLgQ1QJ6BAhHEAE"
+            },
+            {
+              "title": "AI jobs in Karachi",
+              "url": "https://www.google.com/search?sca_esv=c968c4e410faa55c&gl=US&hl=en&q=AI+jobs+in+Karachi&sa=X&ved=2ahUKEwiz483d_dWUAxVoqJUCHaCRDLgQ1QJ6BAhFEAE"
+            },
+            {
+              "title": "Ai automation jobs in karachi for freshers",
+              "url": "https://www.google.com/search?sca_esv=c968c4e410faa55c&gl=US&hl=en&q=Ai+automation+jobs+in+karachi+for+freshers&sa=X&ved=2ahUKEwiz483d_dWUAxVoqJUCHaCRDLgQ1QJ6BAhDEAE"
+            },
+            {
+              "title": "Ai automation jobs in karachi part time",
+              "url": "https://www.google.com/search?sca_esv=c968c4e410faa55c&gl=US&hl=en&q=Ai+automation+jobs+in+karachi+part+time&sa=X&ved=2ahUKEwiz483d_dWUAxVoqJUCHaCRDLgQ1QJ6BAhEEAE"
+            },
+            {
+              "title": "Agentic AI jobs in Karachi",
+              "url": "https://www.google.com/search?sca_esv=c968c4e410faa55c&gl=US&hl=en&q=Agentic+AI+jobs+in+Karachi&sa=X&ved=2ahUKEwiz483d_dWUAxVoqJUCHaCRDLgQ1QJ6BAhCEAE"
+            },
+            {
+              "title": "Machine learning Engineer jobs in Karachi",
+              "url": "https://www.google.com/search?sca_esv=c968c4e410faa55c&gl=US&hl=en&q=Machine+learning+Engineer+jobs+in+Karachi&sa=X&ved=2ahUKEwiz483d_dWUAxVoqJUCHaCRDLgQ1QJ6BAhBEAE"
+            },
+            {
+              "title": "Python jobs in Karachi",
+              "url": "https://www.google.com/search?sca_esv=c968c4e410faa55c&gl=US&hl=en&q=Python+jobs+in+Karachi&sa=X&ved=2ahUKEwiz483d_dWUAxVoqJUCHaCRDLgQ1QJ6BAhAEAE"
+            },
+            {
+              "title": "Ai automation jobs in karachi salary",
+              "url": "https://www.google.com/search?sca_esv=c968c4e410faa55c&gl=US&hl=en&q=Ai+automation+jobs+in+karachi+salary&sa=X&ved=2ahUKEwiz483d_dWUAxVoqJUCHaCRDLgQ1QJ6BAg_EAE"
+            },
+            {
+              "title": "Ai automation jobs in karachi no experience",
+              "url": "https://www.google.com/search?sca_esv=c968c4e410faa55c&gl=US&hl=en&q=Ai+automation+jobs+in+karachi+no+experience&sa=X&ved=2ahUKEwiz483d_dWUAxVoqJUCHaCRDLgQ1QJ6BAhHEAE"
+            },
+            {
+              "title": "AI jobs in Karachi",
+              "url": "https://www.google.com/search?sca_esv=c968c4e410faa55c&gl=US&hl=en&q=AI+jobs+in+Karachi&sa=X&ved=2ahUKEwiz483d_dWUAxVoqJUCHaCRDLgQ1QJ6BAhFEAE"
+            },
+            {
+              "title": "Ai automation jobs in karachi for freshers",
+              "url": "https://www.google.com/search?sca_esv=c968c4e410faa55c&gl=US&hl=en&q=Ai+automation+jobs+in+karachi+for+freshers&sa=X&ved=2ahUKEwiz483d_dWUAxVoqJUCHaCRDLgQ1QJ6BAhDEAE"
+            },
+            {
+              "title": "Ai automation jobs in karachi part time",
+              "url": "https://www.google.com/search?sca_esv=c968c4e410faa55c&gl=US&hl=en&q=Ai+automation+jobs+in+karachi+part+time&sa=X&ved=2ahUKEwiz483d_dWUAxVoqJUCHaCRDLgQ1QJ6BAhEEAE"
+            },
+            {
+              "title": "Agentic AI jobs in Karachi",
+              "url": "https://www.google.com/search?sca_esv=c968c4e410faa55c&gl=US&hl=en&q=Agentic+AI+jobs+in+Karachi&sa=X&ved=2ahUKEwiz483d_dWUAxVoqJUCHaCRDLgQ1QJ6BAhCEAE"
+            },
+            {
+              "title": "Machine learning Engineer jobs in Karachi",
+              "url": "https://www.google.com/search?sca_esv=c968c4e410faa55c&gl=US&hl=en&q=Machine+learning+Engineer+jobs+in+Karachi&sa=X&ved=2ahUKEwiz483d_dWUAxVoqJUCHaCRDLgQ1QJ6BAhBEAE"
+            },
+            {
+              "title": "Python jobs in Karachi",
+              "url": "https://www.google.com/search?sca_esv=c968c4e410faa55c&gl=US&hl=en&q=Python+jobs+in+Karachi&sa=X&ved=2ahUKEwiz483d_dWUAxVoqJUCHaCRDLgQ1QJ6BAhAEAE"
+            }
+          ],
+          "paidResults": [],
+          "paidProducts": [],
+          "organicResults": [
+            {
+              "title": "400+ Ai Jobs, Employment in Karachi 25 May, 2026",
+              "websiteTitle": "Indeed",
+              "url": "https://pk.indeed.com/q-ai-l-karachi-jobs.html",
+              "displayedUrl": "https://pk.indeed.com › q-ai-l-karachi-jobs",
+              "description": "ai jobs in karachi · AI Agent · Front End Developver · AI Developer – Voice & AI Agent Systems · AI Engineer (LLMs, Agents & Automation) · AI Video Creator · AI ...Read more",
+              "emphasizedKeywords": [
+                "AI Agent"
+              ],
+              "siteLinks": [],
+              "productInfo": {},
+              "type": "organic",
+              "position": 1
+            },
+            {
+              "title": "118 Automation engineer jobs in Karachi, Pakistan",
+              "websiteTitle": "Glassdoor",
+              "url": "https://www.glassdoor.com/Job/karachi-automation-engineer-jobs-SRCH_IL.0,7_IM1122_KO8,27.htm",
+              "displayedUrl": "https://www.glassdoor.com › Job › karachi-automation-...",
+              "description": "118 Automation engineer jobs in Karachi, Pakistan ; Enterprise64 · AI-First Software Engineer · 2d ; Expertizo. AI Engineer (LLMs, Agents & Automation) · 30d+ ; Gum ...Read more",
+              "emphasizedKeywords": [
+                "118 Automation engineer jobs in Karachi, Pakistan"
+              ],
+              "siteLinks": [],
+              "productInfo": {},
+              "type": "organic",
+              "position": 2
+            },
+            {
+              "title": "37 Artificial Intelligence jobs in Karāchi",
+              "websiteTitle": "LinkedIn Pakistan",
+              "url": "https://pk.linkedin.com/jobs/artificial-intelligence-jobs-kar%C4%81chi",
+              "displayedUrl": "https://pk.linkedin.com › jobs › artificial-intelligence-job...",
+              "description": "37 Artificial Intelligence Jobs in Karāchi · AI / ML Engineer (Applied AI & Automations) · AI / ML Engineer · AI/ML Engineer – Intelligent Systems & AI ...Read more",
+              "emphasizedKeywords": [
+                "Artificial Intelligence Jobs in Karāchi",
+                "AI",
+                "AI",
+                "AI",
+                "AI",
+                "AI"
+              ],
+              "siteLinks": [],
+              "productInfo": {},
+              "type": "organic",
+              "position": 3
+            },
+            {
+              "title": "AI Automation Engineer (Onsite, Karachi, PKR Salary)",
+              "websiteTitle": "careers-page.com",
+              "url": "https://careers-page.com/hr-ways-3/job/W333X43W",
+              "displayedUrl": "https://careers-page.com › hr-ways-3 › job",
+              "description": "Job Title: N8N Specialist (AI Automations & AI Agents). We're seeking an N8N Specialist to join our growing AI Automation team in Karachi.Read more",
+              "emphasizedKeywords": [
+                "N"
+              ],
+              "siteLinks": [],
+              "productInfo": {},
+              "type": "organic",
+              "position": 4
+            },
+            {
+              "title": "15+ Automation Engineer Jobs in Karachi 2026",
+              "websiteTitle": "BeBee",
+              "url": "https://bebee.com/pk/jobs/role/automation-engineer/karachi",
+              "displayedUrl": "https://bebee.com › ... › Jobs › Automation Engineer",
+              "description": "Automation Engineer jobs in Karachi · QA Automation Engineer · Remote AI Automation Engineer (Work From Home ) · QA Automation Engineer · Senior Automation Engineer ...Read more",
+              "emphasizedKeywords": [
+                "Automation Engineer jobs in Karachi"
+              ],
+              "siteLinks": [],
+              "productInfo": {},
+              "type": "organic",
+              "position": 5
+            },
+            {
+              "title": "14 Remote, Hybrid & Onsite AI Jobs in Karachi",
+              "websiteTitle": "MeetFrank",
+              "url": "https://meetfrank.com/?category=INDUSTRY_AI&places%5B0%5D%5Bid%5D=5a1ef685d75c3c5c7554db67&places%5B0%5D%5Bname%5D=Karachi&places%5B0%5D%5Btype%5D=LOCATION&places%5B1%5D%5Bid%5D=remote&places%5B1%5D%5Bname%5D=Remote&places%5B1%5D%5Btype%5D=REMOTE",
+              "displayedUrl": "https://meetfrank.com › places[0][name]=Karachi",
+              "description": "14 Remote, Hybrid & Onsite AI Jobs in Karachi · Account Manager (Mid-Senior, Remote) · Technical Lead - Structural Biology Networks · Director of ML Research – AI ...Read more",
+              "emphasizedKeywords": [
+                "14 Remote, Hybrid & Onsite AI Jobs in Karachi"
+              ],
+              "siteLinks": [],
+              "productInfo": {},
+              "type": "organic",
+              "position": 6
+            },
+            {
+              "title": "artificial intelligence jobs in karachi",
+              "websiteTitle": "Indeed",
+              "url": "https://pk.indeed.com/q-artificial-intelligence-l-karachi-jobs.html",
+              "displayedUrl": "https://pk.indeed.com › q-artificial-intelligence-l-karachi-...",
+              "description": "Artificial Intelligence jobs now available in Karachi. Ai Developer, Ai Architect, Research Scientist and more on Indeed.com.",
+              "emphasizedKeywords": [
+                "Artificial Intelligence jobs now available in Karachi"
+              ],
+              "siteLinks": [],
+              "productInfo": {},
+              "type": "organic",
+              "position": 7
+            },
+            {
+              "title": "Remote AI Engineer Jobs in Karachi, Pakistan",
+              "websiteTitle": "Crossover for work",
+              "url": "https://www.crossover.com/jobs/ai-engineer/pk/sd/karachi",
+              "displayedUrl": "https://www.crossover.com › ... › AI Engineer › Pakistan",
+              "description": "Find leading US companies hiring full-time AI engineers in Karachi, Pakistan. Leverage AI to find groundbreaking solutions for important problems. APPLY NOW.Read more",
+              "emphasizedKeywords": [
+                "Find leading US companies hiring full-time AI engineers in Karachi"
+              ],
+              "siteLinks": [],
+              "productInfo": {},
+              "averageRating": 4.8,
+              "numberOfReviews": 244,
+              "type": "organic",
+              "position": 8
+            },
+            {
+              "title": "AI Automation Agent jobs in Pakistan",
+              "websiteTitle": "Rozee.pk",
+              "url": "https://www.rozee.pk/job/jsearch/q/AI%20Automation%20Agent",
+              "displayedUrl": "https://www.rozee.pk › job › jsearch",
+              "description": "n8n Automation Developer · AI Pilot · Full Stack Engineer – AI-First Builder (Claude/Anthropic Native) · Senior Software Engineer I - Android · Fullstack Developer ...Read more",
+              "emphasizedKeywords": [
+                "n8n Automation Developer"
+              ],
+              "siteLinks": [],
+              "productInfo": {},
+              "type": "organic",
+              "position": 9
+            }
+          ],
+          "suggestedResults": [],
+          "peopleAlsoAsk": [],
+          "customData": null,
+          "htmlSnapshotUrl": "https://api.apify.com/v2/key-value-stores/fiDTC4IEG4s054qZ4/records/2yaSOWWqLSV79pu-0.html?signature=1ehbGSMyFwOO6HOUiya8X"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ],
+    "AI Agent1": [
+      {
+        "json": {
+          "output": {
+            "candidate_name": "Hattam Waheed",
+            "recommended_jobs": [
+              {
+                "job_title": "AI Engineer (LLMs, Agents & Automation)",
+                "company": "Expertizo",
+                "location": "Karachi, Pakistan",
+                "match_reason": "The job title closely matches the candidate's desired field of \"AI Automation\". The skills required for this role are not explicitly mentioned, but the title suggests a strong overlap with the candidate's expertise in AI, LLMs, agents, and automation.",
+                "apply_link": "https://www.glassdoor.com/Job/karachi-automation-engineer-jobs-SRCH_IL.0,7_IM1122_KO8,27.htm"
+              },
+              {
+                "job_title": "AI Automation Engineer (Onsite, Karachi, PKR Salary)",
+                "company": "careers-page.com",
+                "location": "Karachi",
+                "match_reason": "This role specifically mentions \"AI Automations\" and \"AI Agents,\" which directly aligns with the candidate's skills and interests. The mention of \"n8n specialist\" also indicates a potential match given the candidate's listed skill in \"n8n Automation.\"",
+                "apply_link": "https://careers-page.com/hr-ways-3/job/W333X43W"
+              },
+              {
+                "job_title": "AI / ML Engineer (Applied AI & Automations)",
+                "company": "LinkedIn Pakistan",
+                "location": "Karāchi",
+                "match_reason": "This position includes \"Applied AI & Automations\" in its title, which is highly relevant to the candidate's profile. The candidate's skills in Python, AI, and various automation tools would be beneficial for this role.",
+                "apply_link": "https://pk.linkedin.com/jobs/artificial-intelligence-jobs-kar%C4%81chi"
+              },
+              {
+                "job_title": "AI Agent",
+                "company": "Indeed",
+                "location": "Karachi, Pakistan",
+                "match_reason": "The job title \"AI Agent\" is a direct match for the candidate's interest in AI Automation, and it is listed among other relevant AI roles on Indeed. The candidate's skills in Python, APIs, and AI model interaction would be applicable here.",
+                "apply_link": "https://pk.indeed.com/q-ai-l-karachi-jobs.html"
+              },
+              {
+                "job_title": "AI Automation Agent",
+                "company": "Rozee.pk",
+                "location": "Pakistan",
+                "match_reason": "This role explicitly mentions \"AI Automation Agent\", directly aligning with the candidate's skills and career interests. The mention of \"n8n Automation Developer\" also suggests a good fit, as the candidate has experience with n8n automation.",
+                "apply_link": "https://www.rozee.pk/job/jsearch/q/AI%20Automation%20Agent"
+              }
+            ]
+          }
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ],
+    "AI Agent": [
+      {
+        "json": {
+          "output": {
+            "candidate_name": "Hattam Waheed",
+            "location": "Karachi, Pakistan",
+            "target_job_title": "AI Automation",
+            "technical_skills": [
+              "APIs",
+              "Webhooks",
+              "REST APIs",
+              "JSON",
+              "HTML",
+              "CSS",
+              "JavaScript",
+              "Python",
+              "Google Sheets Automation",
+              "n8n Automation",
+              "ChromaDB",
+              "RAG",
+              "TinyFish Automation",
+              "OpenAI",
+              "Gemini",
+              "Workflow Automation"
+            ]
+          }
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ]
+  },
+  "connections": {
+    "On form submission": {
+      "main": [
+        [
+          {
+            "node": "Extract from File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract from File": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser1": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent1": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append or update row in sheet": {
+      "main": [
+        []
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Append or update row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "5b678721-4e83-40e5-bd29-74be1723ce61",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "fe722380a1c13008728e66f831d8103d62a78824a8b9c557cf68a7a6d242c859"
+  },
+  "id": "F1Aocn6HOqsk7YTd",
+  "tags": []
+}
